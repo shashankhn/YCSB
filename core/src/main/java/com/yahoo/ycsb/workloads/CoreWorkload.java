@@ -17,7 +17,7 @@
 
 package com.yahoo.ycsb.workloads;
 
-import java.util.Properties;
+import java.util.*;
 
 import com.yahoo.ycsb.*;
 import com.yahoo.ycsb.generator.AcknowledgedCounterGenerator;
@@ -35,13 +35,6 @@ import com.yahoo.ycsb.generator.ZipfianGenerator;
 import com.yahoo.ycsb.measurements.Measurements;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Hashtable;
-import java.util.Vector;
-import java.util.List;
-import java.util.Map;
-import java.util.ArrayList;
 
 /**
  * The core benchmark scenario. Represents a set of clients doing simple CRUD operations. The
@@ -618,38 +611,44 @@ public class CoreWorkload extends Workload {
    * for each other, and it will be difficult to reach the target throughput. Ideally, this function would
    * have no side effects other than DB operations.
    */
+  /*
+  Added the support for multiple operations per transaction
+  */
   @Override
-  public boolean doTransaction(DB db, Object threadstate) {
-    boolean ret;
-    long st = System.nanoTime();
+  public boolean[] doTransaction(int opc, DB db, Object threadstate) {
+    boolean[] ret = new boolean[opc];
+    Arrays.fill(ret, true);
+    for (int i = 0; i < opc; i++) {
+      long st = System.nanoTime();
 
-    String op = operationchooser.nextString();
+      String op = operationchooser.nextString();
 
-    switch (op) {
+      switch (op) {
 
-      case "READ":
-        ret = doTransactionRead(db);
-        break;
-      case "UPDATE":
-        ret = doTransactionUpdate(db);
-        break;
-      case "INSERT":
-        ret = doTransactionInsert(db);
-        break;
-      case "SCAN":
-        ret = doTransactionScan(db);
-        break;
-      default:
-        ret = doTransactionReadModifyWrite(db);
+        case "READ":
+          ret[i] = doTransactionRead(db);
+          break;
+        case "UPDATE":
+          ret[i] = doTransactionUpdate(db);
+          break;
+        case "INSERT":
+          ret[i] = doTransactionInsert(db);
+          break;
+        case "SCAN":
+          ret[i] = doTransactionScan(db);
+          break;
+        default:
+          ret[i] = doTransactionReadModifyWrite(db);
+      }
+
+      long en = System.nanoTime();
+      _measurements.measure(_operations.get(op), (int) ((en - st) / 1000));
+      if (ret)
+        _measurements.reportStatus(_operations.get(op), Status.OK);
+      else {
+        _measurements.reportStatus(_operations.get(op), Status.ERROR);
+      }
     }
-
-		long en = System.nanoTime();
-		_measurements.measure(_operations.get(op), (int) ((en - st) / 1000));
-		if (ret)
-			_measurements.reportStatus(_operations.get(op), Status.OK);
-		else {
-			_measurements.reportStatus(_operations.get(op), Status.ERROR);
-		}
 
 		return ret;
   }
