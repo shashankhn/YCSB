@@ -335,7 +335,13 @@ class ClientThread extends Thread
 
 					try {
 						_db.start();
-						if (_workload.doTransaction(_db,_workloadstate)) {
+						boolean noAbort = true;
+						boolean[] transactionOpsStatus = _workload.doTransaction(10,_db,_workloadstate);
+						for(int i = 0; i< 10; i++)
+            {
+              noAbort &= transactionOpsStatus[i];
+            }
+						if (noAbort)) {
 							_db.commit();
 						} else {
 							_db.abort();							
