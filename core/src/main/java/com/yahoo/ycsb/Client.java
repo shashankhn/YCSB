@@ -338,7 +338,7 @@ class ClientThread extends Thread
 						_db.start();
 						boolean noAbort = true;
 						boolean[] transactionOpsStatus = _workload.doTransaction(_opcount,_db,_workloadstate);
-						for(int i = 0; i< _opcount; i++)
+						for(int i = 0; i<_opcount; i++)
             {
               noAbort &= transactionOpsStatus[i];
             }

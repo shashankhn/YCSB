@@ -35,6 +35,7 @@ import com.yahoo.ycsb.generator.ZipfianGenerator;
 import com.yahoo.ycsb.measurements.Measurements;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The core benchmark scenario. Represents a set of clients doing simple CRUD operations. The
@@ -324,6 +325,7 @@ public class CoreWorkload extends Workload {
 
   int recordcount;
 
+  static volatile AtomicInteger FailedtotalOpCount;
   int insertionRetryLimit;
   int insertionRetryInterval;
 
@@ -363,6 +365,7 @@ public class CoreWorkload extends Workload {
    */
   @Override
   public void init(Properties p) throws WorkloadException {
+    FailedtotalOpCount = new AtomicInteger();
     table = p.getProperty(TABLENAME_PROPERTY, TABLENAME_PROPERTY_DEFAULT);
 
     fieldcount =
@@ -641,6 +644,8 @@ public class CoreWorkload extends Workload {
           ret[i] = doTransactionReadModifyWrite(db);
       }
 
+      if(ret[i] == false) FailedtotalOpCount.getAndIncrement();
+
       long en = System.nanoTime();
       _measurements.measure(_operations.get(op), (int) ((en - st) / 1000));
       if (ret[i])
@@ -649,6 +654,8 @@ public class CoreWorkload extends Workload {
         _measurements.reportStatus(_operations.get(op), Status.ERROR);
       }
     }
+
+    System.out.println("The value of Total failed operations for the Client Thread is" + FailedtotalOpCount.get());
 
 		return ret;
   }
@@ -830,4 +837,13 @@ public class CoreWorkload extends Workload {
 
     return (status == Status.OK);
   }
+
+  @Override
+  public void validate(DB db) throws WorkloadException {
+
+    System.out.println("The value of Total failed operations for the workload is" + FailedtotalOpCount.get());
+
+  }
+
+
 }

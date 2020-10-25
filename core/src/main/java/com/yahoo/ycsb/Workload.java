@@ -116,10 +116,9 @@ public abstract class Workload
      /**
       * Perform validation of the database db after the workload has executed.
       * 
-      * @return false if the workload left the database in an inconsistent state, true if it is consistent.
-      * @throws WorkloadException 
+      * @throws WorkloadException
       */
-     public boolean validate(DB db) throws WorkloadException {
-    	 return true;
+     public void validate(DB db) throws WorkloadException {
+
      }
 }
