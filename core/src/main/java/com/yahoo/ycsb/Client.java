@@ -328,20 +328,21 @@ class ClientThread extends Thread
 		{
 			if (_dotransactions)
 			{
-                                long startTimeNanos = System.nanoTime();
 
-				while (((_opcount == 0) || (_opsdone < _opcount)) && !_workload.isStopRequested())
+			  long startTimeNanos = System.nanoTime();
+
+				while (!_workload.isStopRequested())
 				{
 
 					try {
 						_db.start();
 						boolean noAbort = true;
-						boolean[] transactionOpsStatus = _workload.doTransaction(10,_db,_workloadstate);
-						for(int i = 0; i< 10; i++)
+						boolean[] transactionOpsStatus = _workload.doTransaction(_opcount,_db,_workloadstate);
+						for(int i = 0; i< _opcount; i++)
             {
               noAbort &= transactionOpsStatus[i];
             }
-						if (noAbort)) {
+						if (noAbort) {
 							_db.commit();
 						} else {
 							_db.abort();							
@@ -349,8 +350,6 @@ class ClientThread extends Thread
 					} catch (DBException e) {
 						throw new WorkloadException(e);
 					}
-
-					_opsdone++;
 
                                         throttleNanos(startTimeNanos);
 				}

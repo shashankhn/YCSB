@@ -643,7 +643,7 @@ public class CoreWorkload extends Workload {
 
       long en = System.nanoTime();
       _measurements.measure(_operations.get(op), (int) ((en - st) / 1000));
-      if (ret)
+      if (ret[i])
         _measurements.reportStatus(_operations.get(op), Status.OK);
       else {
         _measurements.reportStatus(_operations.get(op), Status.ERROR);
