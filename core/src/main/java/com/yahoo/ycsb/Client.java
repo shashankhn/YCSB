@@ -92,11 +92,8 @@ class StatusThread extends Thread
     do
     {
       long nowMs=System.currentTimeMillis();
-
       lastTotalOps = computeStats(startTimeMs, startIntervalMs, nowMs, lastTotalOps);
-
       alldone = waitForClientsUntil(deadline);
-
       startIntervalMs=nowMs;
       deadline+=_sleeptimeNs;
     }
@@ -258,10 +255,10 @@ class ClientThread extends Thread
    * @param opcount the number of operations (transactions or inserts) to do
    * @param targetperthreadperms target number of operations per thread per ms
    * @param completeLatch The latch tracking the completion of all clients.
-   */
-  public ClientThread(DB db, boolean dotransactions, Workload workload, Properties props, int opcount, double targetperthreadperms, CountDownLatch completeLatch)
-  {
-    _db=db;
+   */                                                                                        // 10
+  public ClientThread(DB db, boolean dotransactions, Workload workload, Properties props, int opcount, double targetperthreadperms, CountDownLatch completeLatch) throws UnknownDBException {
+
+    _db=DBFactory.newDB("com.yahoo.ycsb.db.MongoDbClient",props);
     _dotransactions=dotransactions;
     _workload=workload;
     _opcount=opcount;
@@ -284,16 +281,6 @@ class ClientThread extends Thread
   @Override
   public void run()
   {
-    try
-    {
-      _db.init();
-    }
-    catch (DBException e)
-    {
-      e.printStackTrace();
-      e.printStackTrace(System.out);
-      return;
-    }
 
     try
     {
@@ -306,11 +293,8 @@ class ClientThread extends Thread
       return;
     }
 
-    //NOTE: Switching to using nanoTime and parkNanos for time management here such that the measurements
-    // and the client thread have the same view on time.
 
-		//spread the thread operations out so they don't all hit the DB at the same time
-		try
+    try
 		{
 		   //GH issue 4 - throws exception if _target>1 because random.nextInt argument must be >0
 		   //and the sleep() doesn't make sense for granularities < 1 ms anyway
@@ -326,47 +310,38 @@ class ClientThread extends Thread
 		
 		try
 		{
+
 			if (_dotransactions)
 			{
+			  try {
+          Thread.sleep(100);
+        }
+			  catch (Exception e)
+        {
+          System.out.println(e);
+        }
 
 			  long startTimeNanos = System.nanoTime();
-
-				while (!_workload.isStopRequested())
-				{
-
-					try {
-						_db.start();
-						boolean noAbort = true;
-						boolean[] transactionOpsStatus = _workload.doTransaction(_opcount,_db,_workloadstate);
-						for(int i = 0; i<_opcount; i++)
-            {
-              noAbort &= transactionOpsStatus[i];
-            }
-						if (noAbort) {
-							_db.commit();
-						} else {
-							_db.abort();							
-						}
-					} catch (DBException e) {
-						throw new WorkloadException(e);
-					}
-
-                                        throttleNanos(startTimeNanos);
+        while (!_workload.isStopRequested() && _opsdone < _opcount)
+        {
+          _workload.doTransaction(_opcount,_db,_workloadstate);
+					_opsdone += _opcount;
+					throttleNanos(startTimeNanos);
 				}
 			}
 			else
 			{
-                                long startTimeNanos = System.nanoTime();
+			  long startTimeNanos = System.nanoTime();
 
 				while (((_opcount == 0) || (_opsdone < _opcount)) && !_workload.isStopRequested())
 				{
 
 					try {
-						_db.start();
+						_db.startForInsert();
 						if (_workload.doInsert(_db,_workloadstate)) {
-							_db.commit();
+							_db.commitForInsert();
 						} else {
-							_db.abort();
+							_db.AbortForInsert();
 						}
 					} catch (DBException e) {
 						throw new WorkloadException(e);
@@ -374,7 +349,7 @@ class ClientThread extends Thread
 
 					_opsdone++;
 
-                                        throttleNanos(startTimeNanos);
+					throttleNanos(startTimeNanos);
 				}
 			}
 		}
@@ -385,17 +360,17 @@ class ClientThread extends Thread
 			System.exit(0);
 		}
 
-    try
+   /* try
     {
       _measurements.setIntendedStartTimeNs(0);
-      _db.cleanup();
+      if(_dotransactions) _db.cleanup();
     }
     catch (DBException e)
     {
       e.printStackTrace();
       e.printStackTrace(System.out);
       return;
-    }
+    }*/
     finally
     {
       _completeLatch.countDown();
@@ -589,8 +564,7 @@ public class Client
   }
 
   @SuppressWarnings("unchecked")
-  public static void main(String[] args)
-  {
+  public static void main(String[] args) throws InterruptedException, UnknownDBException, DBException {
     String dbname;
     Properties props=new Properties();
     Properties fileprops=new Properties();
@@ -868,29 +842,33 @@ public class Client
 
     CountDownLatch completeLatch=new CountDownLatch(threadcount);
     final List<ClientThread> clients=new ArrayList<ClientThread>(threadcount);
+
+    DB db=null;
+    try
+    {
+      System.out.println("I am printing the DB name here in main "+dbname);
+      db=DBFactory.newDB(dbname,props);
+    }
+    catch (UnknownDBException e)
+    {
+      System.out.println("Unknown DB "+dbname);
+      System.exit(0);
+    }
+
+
+      System.out.println("------Starting to Initialize The Mongo Client now----------");
+      db.init();
+
+
     for (int threadid=0; threadid<threadcount; threadid++)
     {
-      DB db=null;
-      try
-      {
-        db=DBFactory.newDB(dbname,props);
-      }
-      catch (UnknownDBException e)
-      {
-        System.out.println("Unknown DB "+dbname);
-        System.exit(0);
-      }
 
 
-      int threadopcount = opcount/threadcount;
+      int threadopcount = opcount;
 
-      // ensure correct number of operations, in case opcount is not a multiple of threadcount
-      if (threadid<opcount%threadcount)
-      {
-        ++threadopcount;
-      }
 
-      ClientThread t=new ClientThread(db,dotransactions,workload,props,threadopcount, targetperthreadperms, completeLatch);
+
+      ClientThread t=new ClientThread(db,dotransactions,workload,props,threadopcount,targetperthreadperms,completeLatch);
 
       clients.add(t);
     }
@@ -911,10 +889,13 @@ public class Client
 
     long st=System.currentTimeMillis();
 
+
+
     for (Thread t : clients)
     {
       t.start();
     }
+
 
     Thread terminator = null;
 
@@ -955,21 +936,25 @@ public class Client
     }
 
 		try {
-			DB db = DBFactory.newDB(dbname,props);
-			db.init();
 			if (workload.validate(db))
 				System.out.println("Database validation succeeded");
 			else
 				System.out.println("Database validation failed");
 		} catch (WorkloadException e) {
 			System.out.println("Database validation failed with error: " + e.getMessage());
-		} catch (UnknownDBException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (DBException e) {
-			e.printStackTrace();
 		}
-		
+
+    try
+    {
+      db.cleanupClient();
+    }
+    catch (DBException e)
+    {
+      e.printStackTrace();
+      e.printStackTrace(System.out);
+      return;
+    }
+
 		try
 		{
 			workload.cleanup();
