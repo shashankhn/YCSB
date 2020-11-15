@@ -93,6 +93,21 @@ public class DBWrapper extends DB
         this.reportLatencyForEachError + " and specific error codes to track" +
         " for latency are: " + this.latencyTrackedErrors.toString());
   }
+  
+   public void initializeSession() throws DBException
+  {
+    long st=System.nanoTime();
+    try {
+      _db.initializeSession();
+      long en = System.nanoTime();
+      _measurements.measure("INITSESSIONSUCCESS", (int) ((en - st) / 1000));
+      _measurements.reportStatus("INITSESSIONSUCCESS", Status.OK);
+    } catch (DBException e) {
+      long en = System.nanoTime();
+      _measurements.measure("INITSESSIONABORT", (int) ((en - st) / 1000));
+      _measurements.reportStatus("INITSESSIONABORT", Status.ERROR);
+    }
+  }
 
   /**
    * Cleanup any state for this DB.
@@ -105,6 +120,21 @@ public class DBWrapper extends DB
     _db.cleanup();
     long en=System.nanoTime();
     measure("CLEANUP", Status.OK, ist, st, en);
+  }
+  
+   @Override
+  public void cleanupClient() throws DBException {
+    long st=System.nanoTime();
+    try {
+      _db.cleanupClient();
+      long en = System.nanoTime();
+      _measurements.measure("CLEANUP", (int) ((en - st) / 1000));
+      _measurements.reportStatus("CLEANUP", Status.OK);
+    } catch (DBException e) {
+      long en=System.nanoTime();
+      _measurements.measure("CLEANUP",(int)((en-st)/1000));
+      _measurements.reportStatus("CLEANUP", Status.ERROR);
+    }
   }
 
 	public void start() throws DBException
