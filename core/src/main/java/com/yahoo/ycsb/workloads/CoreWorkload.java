@@ -18,7 +18,6 @@
 package com.yahoo.ycsb.workloads;
 
 import java.util.*;
-
 import com.yahoo.ycsb.*;
 import com.yahoo.ycsb.generator.AcknowledgedCounterGenerator;
 import com.yahoo.ycsb.generator.CounterGenerator;
@@ -325,11 +324,18 @@ public class CoreWorkload extends Workload {
 
   int recordcount;
 
-  static volatile AtomicInteger FailedtotalOpCount;
   int insertionRetryLimit;
   int insertionRetryInterval;
 
   private Measurements _measurements = Measurements.getMeasurements();
+
+  static volatile AtomicInteger FailedtotalOpCount;
+  static volatile AtomicInteger InsertOpCount;
+  static volatile AtomicInteger UpdateOpCount;
+  static volatile AtomicInteger ReadOpCount;
+  static volatile AtomicInteger ScanOpCount;
+
+
 
   protected static NumberGenerator getFieldLengthGenerator(Properties p) throws WorkloadException {
     NumberGenerator fieldlengthgenerator;
@@ -366,6 +372,11 @@ public class CoreWorkload extends Workload {
   @Override
   public void init(Properties p) throws WorkloadException {
     FailedtotalOpCount = new AtomicInteger();
+    InsertOpCount = new AtomicInteger();
+    UpdateOpCount = new AtomicInteger();
+    ReadOpCount = new AtomicInteger();
+    ScanOpCount = new AtomicInteger();
+
     table = p.getProperty(TABLENAME_PROPERTY, TABLENAME_PROPERTY_DEFAULT);
 
     fieldcount =
@@ -614,50 +625,89 @@ public class CoreWorkload extends Workload {
    * for each other, and it will be difficult to reach the target throughput. Ideally, this function would
    * have no side effects other than DB operations.
    */
-  /*
-  Added the support for multiple operations per transaction
-  */
   @Override
-  public boolean[] doTransaction(int opc, DB db, Object threadstate) {
-    boolean[] ret = new boolean[opc];
-    Arrays.fill(ret, true);
-    for (int i = 0; i < opc; i++) {
-      long st = System.nanoTime();
+  public void doTransaction(int opc, DB db, Object threadstate) {
 
-      String op = operationchooser.nextString();
+    System.out.println("I am printing now" +db);
 
-      switch (op) {
+    try {
+      // Begin transaction here
+      // Begin transaction here
 
-        case "READ":
-          ret[i] = doTransactionRead(db);
-          break;
-        case "UPDATE":
-          ret[i] = doTransactionUpdate(db);
-          break;
-        case "INSERT":
-          ret[i] = doTransactionInsert(db);
-          break;
-        case "SCAN":
-          ret[i] = doTransactionScan(db);
-          break;
-        default:
-          ret[i] = doTransactionReadModifyWrite(db);
+      System.out.println("I will start initializing session now ---------------");
+      db.initializeSession();
+
+      db.start();
+      //status of operations for each transaction
+      boolean[] transactionOpsStatus = new boolean[opc];
+      Arrays.fill(transactionOpsStatus, true);
+
+      for (int i = 0; i < opc; i++) {
+
+        long st = System.nanoTime();
+
+        String op = operationchooser.nextString();
+        //// choose a random key, Do x = opc operations - 80% reads, 15% updates and 5% inserts for each transaction
+
+
+        switch (op) {
+
+          case "READ":
+            // Do read operation
+            transactionOpsStatus[i] = doTransactionRead(db);
+            if (transactionOpsStatus[i] == false) ReadOpCount.getAndIncrement();
+            break;
+          case "UPDATE":
+            // Do update operation
+            transactionOpsStatus[i] = doTransactionUpdate(db);
+            if (transactionOpsStatus[i] == false) UpdateOpCount.getAndIncrement();
+            break;
+          case "INSERT":
+            // Do insert operation
+            transactionOpsStatus[i] = doTransactionInsert(db);
+            if (transactionOpsStatus[i] == false) InsertOpCount.getAndIncrement();
+            break;
+          case "SCAN":
+            // Do scan operation
+            transactionOpsStatus[i] = doTransactionScan(db);
+            if (transactionOpsStatus[i] == false) ScanOpCount.getAndIncrement();
+            break;
+          default:
+            // Do read,update operation
+            transactionOpsStatus[i] = doTransactionReadModifyWrite(db);
+        }
+
+        // Abort here if atleast one of the operations fails
+        if (transactionOpsStatus[i] == false) {
+          FailedtotalOpCount.getAndIncrement();
+          System.out.println("I am committing the transaction");
+          db.abort();
+        }
+
+        // do metaData logging here
+        long en = System.nanoTime();
+        _measurements.measure(_operations.get(op), (int) ((en - st) / 1000));
+        if (transactionOpsStatus[i])
+          _measurements.reportStatus(_operations.get(op), Status.OK);
+        else {
+          _measurements.reportStatus(_operations.get(op), Status.ERROR);
+        }
       }
 
-      if(ret[i] == false) FailedtotalOpCount.getAndIncrement();
 
-      long en = System.nanoTime();
-      _measurements.measure(_operations.get(op), (int) ((en - st) / 1000));
-      if (ret[i])
-        _measurements.reportStatus(_operations.get(op), Status.OK);
-      else {
-        _measurements.reportStatus(_operations.get(op), Status.ERROR);
-      }
+      // Commit transaction here when all the operations are successfully executed
+      System.out.println("I am committing the transaction");
+      db.commit();
+
+    }
+    catch (DBException e) {
+      e.printStackTrace();
+      e.printStackTrace(System.out);
+      return;
     }
 
-    System.out.println("The value of Total failed operations for the Client Thread is" + FailedtotalOpCount.get());
+    //System.out.println("The value of Total failed operations for the Client Thread is" + FailedtotalOpCount.get());
 
-		return ret;
   }
 
   /**
@@ -701,7 +751,7 @@ public class CoreWorkload extends Workload {
   }
 
   public boolean doTransactionRead(DB db) {
-    // choose a random key
+
     int keynum = nextKeynum();
 
     String keyname = buildKeyName(keynum);
@@ -837,13 +887,28 @@ public class CoreWorkload extends Workload {
 
     return (status == Status.OK);
   }
-
   @Override
-  public void validate(DB db) throws WorkloadException {
-
+  public boolean validate(DB db) throws WorkloadException {
+    System.out.println("-------------------------------validating now------------------------------");
     System.out.println("The value of Total failed operations for the workload is" + FailedtotalOpCount.get());
+    System.out.println("-------------------------------validation done------------------------------");
 
+    System.out.println("-------------------------------validating now for Insert------------------------------");
+    System.out.println("The value of Total failed operations for the workload is" + InsertOpCount.get());
+    System.out.println("-------------------------------validation done for Insert ------------------------------");
+
+    System.out.println("-------------------------------validating now for Update------------------------------");
+    System.out.println("The value of Total failed operations for the workload is" + UpdateOpCount.get());
+    System.out.println("-------------------------------validation done for Update ------------------------------");
+
+    System.out.println("-------------------------------validating now for Scan------------------------------");
+    System.out.println("The value of Total failed operations for the workload is" + ScanOpCount.get());
+    System.out.println("-------------------------------validation done for Insert ------------------------------");
+
+    System.out.println("-------------------------------validating now for Read------------------------------");
+    System.out.println("The value of Total failed operations for the workload is" + ReadOpCount.get());
+    System.out.println("-------------------------------validation done for Read ------------------------------");
+
+    return true;
   }
-
-
 }
