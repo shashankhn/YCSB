@@ -41,118 +41,135 @@ import java.util.Vector;
  * target application.  For the sake of comparison between experiments we also 
  * recommend you explain the semantics you chose when presenting performance results.
  */
-public abstract class DB
-{
-	/**
-	 * Properties for configuring this DB.
-	 */
-	Properties _p=new Properties();
+public abstract class DB {
+  /**
+   * Properties for configuring this DB.
+   */
+  Properties _p = new Properties();
 
-	/**
-	 * Set the properties for this DB.
-	 */
-	public void setProperties(Properties p)
-	{
-		_p=p;
+  /**
+   * Set the properties for this DB.
+   */
+  public void setProperties(Properties p) {
+    _p = p;
 
-	}
+  }
 
-	/**
-	 * Get the set of properties for this DB.
-	 */
-	public Properties getProperties()
-	{
-		return _p; 
-	}
+  /**
+   * Get the set of properties for this DB.
+   */
+  public Properties getProperties() {
+    return _p;
+  }
 
-	/**
-	 * Initialize any state for this DB.
-	 * Called once per DB instance; there is one DB instance per client thread.
-	 */
-	public void init() throws DBException
-	{
-	}
+  /**
+   * Initialize any state for this DB.
+   * Called once per DB instance; there is one DB instance per client thread.
+   */
 
-	/**
-	 * Cleanup any state for this DB.
-	 * Called once per DB instance; there is one DB instance per client thread.
-	 */
-	public void cleanup() throws DBException
-	{
-	}
+  public void cleanupClient() throws DBException {
 
-	/**
-	 * Start a database transaction. 
-	 */
-	public void start() throws DBException
-	{
-	}
-	
-	/**
-	 * Commit the current database transaction. 
-	 */
-	public void commit() throws DBException
-	{
-	}
+  }
 
-	/**
-	 * Abort the current database transaction. 
-	 */
-	public void abort() throws DBException
-	{
-	}
 
-	/**
-	 * Read a record from the database. Each field/value pair from the result will be stored in a HashMap.
-	 *
-	 * @param table The name of the table
-	 * @param key The record key of the record to read.
-	 * @param fields The list of fields to read, or null for all of them
-	 * @param result A HashMap of field/value pairs for the result
-	 * @return The result of the operation.
-	 */
-	public abstract Status read(String table, String key, Set<String> fields, HashMap<String,ByteIterator> result);
+  public void init() throws DBException {
+    System.out.println("------- Calling Init of base class ---------");
+  }
 
-	/**
-	 * Perform a range scan for a set of records in the database. Each field/value pair from the result will be stored in a HashMap.
-	 *
-	 * @param table The name of the table
-	 * @param startkey The record key of the first record to read.
-	 * @param recordcount The number of records to read
-	 * @param fields The list of fields to read, or null for all of them
-	 * @param result A Vector of HashMaps, where each HashMap is a set field/value pairs for one record
-	 * @return The result of the operation.
-	 */
-	public abstract Status scan(String table, String startkey, int recordcount, Set<String> fields, Vector<HashMap<String,ByteIterator>> result);
-	
-	/**
-	 * Update a record in the database. Any field/value pairs in the specified values HashMap will be written into the record with the specified
-	 * record key, overwriting any existing values with the same field name.
-	 *
-	 * @param table The name of the table
-	 * @param key The record key of the record to write.
-	 * @param values A HashMap of field/value pairs to update in the record
-	 * @return The result of the operation.
-	 */
-	public abstract Status update(String table, String key, HashMap<String,ByteIterator> values);
+  /**
+   * Cleanup any state for this DB.
+   * Called once per DB instance; there is one DB instance per client thread.
+   */
+  public void cleanup() throws DBException {
+  }
 
-	/**
-	 * Insert a record in the database. Any field/value pairs in the specified values HashMap will be written into the record with the specified
-	 * record key.
-	 *
-	 * @param table The name of the table
-	 * @param key The record key of the record to insert.
-	 * @param values A HashMap of field/value pairs to insert in the record
-	 * @return The result of the operation.
-	 */
-	public abstract Status insert(String table, String key, HashMap<String,ByteIterator> values);
+  public void commitForInsert() throws DBException {
 
-	/**
-	 * Delete a record from the database. 
-	 *
-	 * @param table The name of the table
-	 * @param key The record key of the record to delete.
-	 * @return The result of the operation.
-	 */
-	public abstract Status delete(String table, String key);
+  }
+
+  public void AbortForInsert() throws DBException {
+
+  }
+
+  public void startForInsert() throws DBException {
+
+  }
+
+
+  /**
+   * Start a database transaction.
+   */
+  public void start() throws DBException {
+  }
+
+  /**
+   * Commit the current database transaction.
+   */
+  public void commit() throws DBException {
+  }
+
+  /**
+   * Abort the current database transaction.
+   */
+  public void abort() throws DBException {
+  }
+
+  /**
+   * Read a record from the database. Each field/value pair from the result will be stored in a HashMap.
+   *
+   * @param table  The name of the table
+   * @param key    The record key of the record to read.
+   * @param fields The list of fields to read, or null for all of them
+   * @param result A HashMap of field/value pairs for the result
+   * @return The result of the operation.
+   */
+  public abstract Status read(String table, String key, Set<String> fields, HashMap<String, ByteIterator> result);
+
+  /**
+   * Perform a range scan for a set of records in the database. Each field/value pair from the result will be stored in a HashMap.
+   *
+   * @param table       The name of the table
+   * @param startkey    The record key of the first record to read.
+   * @param recordcount The number of records to read
+   * @param fields      The list of fields to read, or null for all of them
+   * @param result      A Vector of HashMaps, where each HashMap is a set field/value pairs for one record
+   * @return The result of the operation.
+   */
+  public abstract Status scan(String table, String startkey, int recordcount, Set<String> fields, Vector<HashMap<String, ByteIterator>> result);
+
+  /**
+   * Update a record in the database. Any field/value pairs in the specified values HashMap will be written into the record with the specified
+   * record key, overwriting any existing values with the same field name.
+   *
+   * @param table  The name of the table
+   * @param key    The record key of the record to write.
+   * @param values A HashMap of field/value pairs to update in the record
+   * @return The result of the operation.
+   */
+  public abstract Status update(String table, String key, HashMap<String, ByteIterator> values);
+
+  /**
+   * Insert a record in the database. Any field/value pairs in the specified values HashMap will be written into the record with the specified
+   * record key.
+   *
+   * @param table  The name of the table
+   * @param key    The record key of the record to insert.
+   * @param values A HashMap of field/value pairs to insert in the record
+   * @return The result of the operation.
+   */
+  public abstract Status insert(String table, String key, HashMap<String, ByteIterator> values);
+
+  /**
+   * Delete a record from the database.
+   *
+   * @param table The name of the table
+   * @param key   The record key of the record to delete.
+   * @return The result of the operation.
+   */
+  public abstract Status delete(String table, String key);
+
+  public void initializeSession() throws DBException
+  {
+    System.out.println("In DB I am starting a new Mongo session");
+  }
 }
