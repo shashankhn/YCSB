@@ -24,10 +24,8 @@
  */
 package com.yahoo.ycsb.db;
 
-import com.mongodb.MongoClient;
-import com.mongodb.MongoClientURI;
-import com.mongodb.ReadPreference;
-import com.mongodb.WriteConcern;
+import com.mongodb.*;
+import com.mongodb.client.ClientSession;
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoCursor;
@@ -96,6 +94,8 @@ public class MongoDbClient extends DB {
   /** A singleton Mongo instance. */
   private static MongoClient mongoClient;
 
+  private static  ClientSession mongoSession;
+
   /** The default read preference for the test. */
   private static ReadPreference readPreference;
 
@@ -117,20 +117,42 @@ public class MongoDbClient extends DB {
    */
   @Override
   public void cleanup() throws DBException {
+    System.out.println("******************* Cleaning up MongoSession now ********************");
     if (INIT_COUNT.decrementAndGet() == 0) {
       try {
-        mongoClient.close();
+        mongoSession.close();
+        //mongoClient.close();
       } catch (Exception e1) {
         System.err.println("Could not close MongoDB connection pool: "
             + e1.toString());
         e1.printStackTrace();
         return;
       } finally {
+
         database = null;
-        mongoClient = null;
+        mongoSession = null;
+        //mongoClient = null;
       }
     }
   }
+
+
+  @Override
+  public void cleanupClient() throws DBException {
+    System.out.println("******************* Cleaning up MongoClient now ********************");
+    try {
+      mongoClient.close();
+    } catch (Exception e1) {
+      System.err.println("Could not close MongoDB connection pool: " + e1.toString());
+      e1.printStackTrace();
+      return;
+    } finally {
+      mongoClient = null;
+    }
+
+  }
+
+
 
   /**
    * Delete a record from the database.
@@ -165,6 +187,8 @@ public class MongoDbClient extends DB {
    * Initialize any state for this DB. Called once per DB instance; there is one
    * DB instance per client thread.
    */
+
+
   @Override
   public void init() throws DBException {
     INIT_COUNT.incrementAndGet();
@@ -179,18 +203,17 @@ public class MongoDbClient extends DB {
       batchSize = Integer.parseInt(props.getProperty("batchsize", "1"));
 
       // Set is inserts are done as upserts. Defaults to false.
-      useUpsert = Boolean.parseBoolean(
+        useUpsert = Boolean.parseBoolean(
           props.getProperty("mongodb.upsert", "false"));
 
       // Just use the standard connection format URL
       // http://docs.mongodb.org/manual/reference/connection-string/
       // to configure the client.
-      String url = props.getProperty("mongodb.url", null);
+
+      //String url = props.getProperty("mongodb.url", null);
       boolean defaultedUrl = false;
-      if (url == null) {
-        defaultedUrl = true;
-        url = "mongodb://localhost:27017/ycsb?w=1";
-      }
+      String url = "mongodb://localhost:27017/ycsb?w=1&maxPoolSize=100";
+
 
       url = OptionsSupport.updateUrl(url, props);
 
@@ -203,7 +226,10 @@ public class MongoDbClient extends DB {
       }
 
       try {
-        MongoClientURI uri = new MongoClientURI(url);
+
+        MongoClientOptions.Builder optionsBuilder = new MongoClientOptions.Builder();
+        optionsBuilder.maxConnectionIdleTime(3000);
+        MongoClientURI uri = new MongoClientURI(url,optionsBuilder);
 
         String uriDb = uri.getDatabase();
         if (!defaultedUrl && (uriDb != null) && !uriDb.isEmpty()
@@ -224,6 +250,8 @@ public class MongoDbClient extends DB {
                 .withReadPreference(readPreference)
                 .withWriteConcern(writeConcern);
 
+        System.out.println("In MongoDBClient I am starting a new Mongo Client");
+
         System.out.println("mongo client connection created with " + url);
       } catch (Exception e1) {
         System.err
@@ -234,6 +262,92 @@ public class MongoDbClient extends DB {
       }
     }
   }
+
+  @Override
+  public void initializeSession() throws DBException
+  {
+      System.out.println("In MongoDBClient I am starting a new Mongo session");
+      mongoSession = mongoClient.startSession();
+      return;
+  }
+
+
+  @Override
+  public void start() throws DBException {
+    super.start();
+    mongoSession.startTransaction();
+    try {
+      System.out.println("Hello!! I am starting a transaction now");
+    } catch (Exception e) {
+     // mongoSession.close();
+      e.printStackTrace();
+      throw new DBException(e);
+    }
+  }
+
+
+  @Override
+  public void commit() throws DBException {
+    super.commit();
+    try {
+      mongoSession.commitTransaction();
+    } catch (Exception e)  {
+      e.printStackTrace();
+      throw new DBException(e);
+    }
+    finally{ mongoSession.close(); }
+  }
+
+  @Override
+  public void abort() throws DBException {
+    super.abort();
+    try {
+      mongoSession.abortTransaction();
+    } catch (Exception e) {
+      e.printStackTrace();
+      throw new DBException(e);
+    }
+    finally{ mongoSession.close(); }
+  }
+
+
+  @Override
+  public void startForInsert() throws DBException {
+    super.startForInsert();
+    try {
+      System.out.println("Hello!! I am starting to insert now");
+    } catch (Exception e) {
+      // mongoSession.close();
+      e.printStackTrace();
+      throw new DBException(e);
+    }
+  }
+
+  @Override
+  public void commitForInsert() throws DBException {
+    try {
+      super.commitForInsert();
+    } catch (Exception e)  {
+      e.printStackTrace();
+      throw new DBException(e);
+    }
+  }
+
+  @Override
+  public void AbortForInsert() throws DBException {
+    try {
+      super.AbortForInsert();
+    } catch (Exception e)  {
+      e.printStackTrace();
+      throw new DBException(e);
+    }
+  }
+
+
+
+
+
+
 
   /**
    * Insert a record in the database. Any field/value pairs in the specified
